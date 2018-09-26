@@ -1,0 +1,12 @@
+[
+    {
+        "text": "Oh hai! How you doing?",
+        "prompt": {
+            "id": "textPrompt",
+            "responseKey": "doing_how"
+        }
+    },
+    {
+        "text": "I hear that."
+    }
+]
