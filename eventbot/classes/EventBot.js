@@ -2,6 +2,14 @@ const { ActivityTypes } = require('botbuilder');
 const { DialogSet, WaterfallDialog } = require('botbuilder-dialogs');
 const fs = require('fs');
 
+/**
+ * EventBot is a bot runner class that emits events for incoming messages, and provides mechanisms
+ * for handling events and doing some basic trigger matching.
+ *
+ * This allows developers to create a bot object, then register handlers for various event and triggers
+ * through plugins and modules.
+ */
+
 // TODO: Should this maybe be based on component dialog? Could make it cool way to compose bots?
 module.exports.EventBot = class EventBot {
     constructor(conversationSate, userState) {

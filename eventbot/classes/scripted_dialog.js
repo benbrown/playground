@@ -1,6 +1,10 @@
 const { ActivityTypes } = require('botbuilder');
 const { Dialog, DialogReason } = require('botbuilder-dialogs');
 
+/**
+ * ScriptedDialog is a specialized dialog class that behaves like a WaterfallDialog
+ * but reads the steps from ane external JSON file rather than having them defined in code.
+ */
 class ScriptedDialog extends Dialog {
     constructor(dialogId, pathToJson, onComplete) {
         super(dialogId);

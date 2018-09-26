@@ -1,4 +1,4 @@
-{ ComponentDialog, WaterfallDialog, TextPrompt } = require('botbuilder-dialogs');
+const { ComponentDialog, WaterfallDialog, TextPrompt } = require('botbuilder-dialogs');
 
 module.exports = function(bot) {
 
