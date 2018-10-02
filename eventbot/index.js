@@ -5,11 +5,10 @@ const restify = require('restify');
 const path = require('path');
 
 // Import required bot services. See https://aka.ms/bot-services to learn more about the different part of a bot
-const { BotFrameworkAdapter, MemoryStorage, ConversationState, UserState } = require('botbuilder');
+const { BotFrameworkAdapter, MemoryStorage, ConversationState, UserState, ShowTypingMiddleware } = require('botbuilder');
 const { BotConfiguration } = require('botframework-config');
-
 // Import our custom bot class that provides a turn handling function.
-const { EventBot } = require('./classes/EventBot');
+const { EventBot } = require('./classes/EventBotComposable');
 
 // Read botFilePath and botFileSecret from .env file
 // Note: Ensure you have a .env file and include botFilePath and botFileSecret.
@@ -52,6 +51,9 @@ const adapter = new BotFrameworkAdapter({
     appPassword: endpointConfig.appPassword || process.env.microsoftAppPassword
 });
 
+// Load typing middleware
+// adapter.use(new ShowTypingMiddleware(2000,4000));
+
 // Define state store for your bot. See https://aka.ms/about-bot-state to learn more about using MemoryStorage.
 // A bot requires a some sort of state storage system to persist the dialog and user state between messages.
 const memoryStorage = new MemoryStorage();
@@ -75,7 +77,7 @@ const conversationState = new ConversationState(memoryStorage);
 const userState = new UserState(memoryStorage);
 
 // Create the bot object that provides the turn handler function.
-const bot = new EventBot(conversationState, userState);
+const bot = new EventBot('main', conversationState, userState);
 
 // Load plugin modules from the plugins folder.
 // These will add handlers, interrupts and other features.
@@ -85,7 +87,7 @@ bot.loadPlugins(__dirname + '/plugins/');
 server.post('/api/messages', (req, res) => {
     adapter.processActivity(req, res, async (context) => {
         // Route theincoming activity to the main bot turn handler.
-        await bot.onTurn(context);
+        await bot.run(context);
     });
 });
 

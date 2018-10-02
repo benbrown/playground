@@ -1,11 +1,12 @@
-const { TextPrompt } = require('botbuilder-dialogs');
+const { TextPrompt, WaterfallDialog } = require('botbuilder-dialogs');
 const { ScriptedDialog } = require('../classes/scripted_dialog');
 
 module.exports = function(bot) {
     // Test to see if the user is trying to cancel by saying "cancel"
     bot.handle(async (dc) => {
-        return (dc.context.activity.text.toLowerCase().includes('hi'));
+        return (dc.context.activity.type == 'message' && dc.context.activity.text && dc.context.activity.text.toLowerCase().includes('hi'));
     }, async (dc) => {
+        console.log('-------- going to begin a dialog!');
         return await dc.beginDialog('hello');
     });
 
@@ -16,7 +17,7 @@ module.exports = function(bot) {
 
     // bot.addDialog(new WaterfallDialog('hello', [
     //     async (step) => {
-    //         await step.prompt('textPrompt','Hi! How are you?');
+    //         return await step.prompt('textPrompt','Hi! How are you?');
     //     },
     //     async (step) => {
     //         const res = step.result;

@@ -1,3 +1,4 @@
+const { Dialog, WaterfallDialog } = require('botbuilder-dialogs');
 module.exports = function(bot) {
     // Test to see if the user is trying to cancel by saying "cancel"
     bot.interruption(async (dc) => {
@@ -21,9 +22,26 @@ module.exports = function(bot) {
             dc.stack.forEach(function(dialog) {
                 console.log('parent dialog == ', dialog.id);
             });
-            return await dc.context.sendActivity(`Do you need help with ${ dc.activeDialog.id }?`);
+            return await dc.beginDialog('help');
+            // return await dc.context.sendActivity(`THIS IS TOP LEVEL HELP`);
+
+            // await dc.context.sendActivity(`You need help with ${ dc.activeDialog.id }!`);
+            // return Dialog.EndOfTurn;
         } else {
-            return await dc.context.sendActivity(`You need some help eh?`);
+            await dc.context.sendActivity(`THIS IS TOP LEVEL HELP`);
+            return Dialog.EndOfTurn;
+
         }
     });
+
+    bot.addDialog(new WaterfallDialog('help', [
+        async (step) => {
+            return await step.prompt('textPrompt','Do you need help with this feature?');
+        },
+       async (step) => {
+            await step.context.sendActivity('You said ' + step.result);
+            return step.endDialog();
+        }
+    ]))
+
 };

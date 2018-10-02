@@ -66,7 +66,15 @@ class ScriptedDialog extends Dialog {
             try {
                 return await dc.prompt(line.prompt.id, line.text);
             } catch (err) {
+                console.log('----------------------------------------------');
                 console.error(err);
+                console.log('----------------------------------------------');
+                console.log('----------------------------------------------');
+                console.log('----------------------------------------------');
+                console.log('----------------------------------------------');
+                console.log('----------------------------------------------');
+                console.log('----------------------------------------------');
+
                 await dc.context.sendActivity(`Failed to start prompt ${ line.prompt.id }`);
                 return await step.next();
             }
