@@ -100,7 +100,7 @@ module.exports.EventBot = class EventBot extends ComponentDialog {
         return results;
     }
 
-     onBeginDialog(innerDC, options) {
+    onBeginDialog(innerDC, options) {
         return this.onRunTurn(innerDC, options);
     }
 
@@ -133,11 +133,11 @@ module.exports.EventBot = class EventBot extends ComponentDialog {
 
     async onRunTurn(dc) {
 
-        let results = {status: 'empty'};
-        
+        let results = { status: 'empty' };
 
         // Consult the active dialogs - do you want this?
         const consult = await dc.consultDialog();
+
         // if the score is low or there is nothing to do, do our own stuff FIRST.
         if (consult.status === DialogTurnStatus.empty || consult.score <= 0.5) {
 
@@ -161,7 +161,7 @@ module.exports.EventBot = class EventBot extends ComponentDialog {
                 results = await dc.continueDialog();
             }
 
-            // DO WE EVEN WATN TO RUN INTERUPTS IF THIS IS THE cASE? SINCE CHILD DIALOG IS GONNA TAKE THIS?
+            // DO WE EVEN WANT TO RUN INTERUPTS IF THIS IS THE cASE? SINCE CHILD DIALOG IS GONNA TAKE THIS?
             for (var i = 0; i < this.interruptions.length; i++) {
                 const interupt = this.interruptions[i];
                 let matches = await interupt.test(dc);
