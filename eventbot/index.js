@@ -8,7 +8,7 @@ const path = require('path');
 const { BotFrameworkAdapter, MemoryStorage, ConversationState, UserState, ShowTypingMiddleware } = require('botbuilder');
 const { BotConfiguration } = require('botframework-config');
 // Import our custom bot class that provides a turn handling function.
-const { EventBot } = require('./classes/EventBotComposable');
+const { EventBot } = require('./classes/EventBot');
 
 // Read botFilePath and botFileSecret from .env file
 // Note: Ensure you have a .env file and include botFilePath and botFileSecret.

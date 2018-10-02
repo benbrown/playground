@@ -6,7 +6,7 @@ build the libraries, then run `npm link` in libraries/botbuilder and libraries/b
 
 Then, from inside this project, run `npm link botbuilder ; npm link botbuilder-core ; npm link botbuilder-dialogs`
 
-## EventBotComposable
+## EventBot
 
 This is a "Bot runner" class that exposes a `.run` method for handling an incoming turn. The run method
 handles the boilerplate of creating a dialog turn context, running continue, and saving changes to state.
