@@ -5,7 +5,7 @@ const restify = require('restify');
 const path = require('path');
 
 // Import required bot services. See https://aka.ms/bot-services to learn more about the different part of a bot
-const { BotFrameworkAdapter, MemoryStorage, ConversationState, UserState } = require('botbuilder');
+const { BotFrameworkAdapter, MemoryStorage, ConversationState, UserState, TurnContext } = require('botbuilder');
 const { BotConfiguration } = require('botframework-config');
 
 const { SlackAdapter } = require('./slack_adapter.js');
@@ -87,25 +87,31 @@ server.post('/api/messages', (req, res) => {
     adapter.processActivity(req, res, async (context) => {
 
         if (context.activity.type === 'message') {
-            await context.sendActivity({
-                text: 'Heard: ' + context.activity.text,
-                channelData: {
-                    attachments: [
-                        {
-                            title: 'Options',
-                            callback_id: '123',
-                            actions: [
-                                {
-                                    name: 'ok_button',
-                                    text: 'OK',
-                                    value: true,
-                                    type: 'button',
-                                }
-                            ]
-                        }
-                    ]
-                }
-             });
+
+            if (context.activity.text === 'delayed') {
+                await context.sendActivity('give me 10 seconds....');
+                await respondDelayed(context);
+            } else {
+                await context.sendActivity({
+                    text: 'Heard: ' + context.activity.text,
+                    channelData: {
+                        attachments: [
+                            {
+                                title: 'Options',
+                                callback_id: '123',
+                                actions: [
+                                    {
+                                        name: 'ok_button',
+                                        text: 'OK',
+                                        value: true,
+                                        type: 'button',
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                });
+            }
 
         } else {
             console.log('EVENT:', context.activity.type);
@@ -148,3 +154,19 @@ adapter.onTurnError = async (context, error) => {
     // Clear out state
     conversationState.clear(context);
 };
+
+
+
+async function respondDelayed(context) {
+
+    var reference = TurnContext.getConversationReference(context.activity);
+    console.log('GOT A REFERENCE', reference);
+    setTimeout(async function() {
+        console.log('FIRING DELAYED CONTINUE');
+        await adapter.continueConversation(reference, async function(new_context) {
+            console.log('GOT A NEW CONTEXT');
+            await new_context.sendActivity('I waited 10 seconds to tell you this.');
+        });
+    }, 10000);
+
+}

@@ -56,7 +56,15 @@ class SlackAdapter extends BotAdapter {
     }
 
     async continueConversation(reference, logic) {
+        console.log('ATTEMPTING TO CONTINUE CONVERSATION');
+        const request = TurnContext.applyConversationReference(
+            {type: 'event',  name: 'continueConversation' },
+            reference,
+            true
+        );
+        const context = new TurnContext(this, request);
 
+        return this.runMiddleware(context, logic);
     }
 
     async processActivity(req, res, logic) {
@@ -65,7 +73,7 @@ class SlackAdapter extends BotAdapter {
         // There are a few different types of event that Slack might send.
         let event = req.body;
 
-        // console.log('GOT SLACK EVENT', event);
+        console.log('GOT SLACK EVENT', event);
         if (event.type === 'url_verification') {
             res.status(200);
             res.send(event.challenge);
@@ -109,7 +117,9 @@ class SlackAdapter extends BotAdapter {
                 res.end();
             } else {
 
+
                 const activity = {
+                    id: event.event.ts, // TODO: is this the right field?
                     timestamp: new Date(),
                     channelId: event.team_id,
                     conversation: event.event.channel,
