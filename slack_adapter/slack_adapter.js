@@ -2,7 +2,6 @@ const { ActivityTypes, BotAdapter, TurnContext } = require('botbuilder');
 const { WebClient } = require('@slack/client');
 
 class SlackAdapter extends BotAdapter {
-
     // TODO: Define options
     constructor(options) {
         super();
@@ -19,46 +18,105 @@ class SlackAdapter extends BotAdapter {
                 this.identity = identity;
                 console.log('My identity: ', identity);
             });
+        } else if (!this.options.getTokenForTeam) {
+
+        }
+    }
+
+    activityToSlack(activity) {
+        const message = {
+            channel: activity.conversation,
+            text: activity.text
+        };
+
+        // if channelData is specified, overwrite any fields in message object
+        if (activity.channelData) {
+            Object.keys(activity.channelData).forEach(function(key) {
+                message[key] = activity.channelData[key];
+            });
         }
 
+        return message;
     }
 
     async sendActivities(context, activities) {
+        const responses = [];
         for (var a = 0; a < activities.length; a++) {
             const activity = activities[a];
-            // console.log('SEND', activity);
             if (activity.type === ActivityTypes.Message) {
-                // TODO: if this.slack isn't created, we need to make one for THIS TEAM in particular
-                const message = {
-                    channel: activity.conversation,
-                    text: activity.text,
-                }
+                const message = this.activityToSlack(activity);
 
-                // if channelData is specified, overwrite any fields in message object
-                if (activity.channelData) {
-                    Object.keys(activity.channelData).forEach(function(key) {
-                        message[key] = activity.channelData[key];
-                    })
+                try {
+                    const result = await this.getAPI(context.activity).chat.postMessage(message);
+                    console.log('RESULT OF POST', result);
+                    if (result.ok === true) {
+                        responses.push({
+                            id: result.ts,
+                            conversation: result.channel,
+                        });
+                    } else {
+                        console.error('Error sending activity to Slack:', result);
+                    }
+                } catch (err) {
+                    console.error('Error sending activity to Slack:', err);                    
                 }
-
-                // TODO: other fields TBD
-                await this.slack.chat.postMessage(message);
+            } else {
+                // TODO: Handle sending of other types of message?
             }
         }
+
+        return responses;
+    }
+
+    getAPI(activity) {
+        // TODO: use activity.channelId (the slack team id) and get the appropriate token using getTokenForTeam
+        return this.slack;
     }
 
     async updateActivity(context, activity) {
+        if (activity.id) {
+            console.log('UPDATE ACTIVITY', activity);
+            try {
+                const message = this.activityToSlack(activity);
 
+                // set the id of the message to be updated
+                message.ts = activity.id;
+
+                console.log('MESSAGE TO UPDATE', message);
+
+                const results = await this.getAPI(context.activity).chat.update(message);
+                if (!results.ok) {
+                    console.error('Error updating activity on Slack:', results);
+                }
+
+            } catch (err) {
+                console.error('Error updating activity on Slack:', err);
+            }
+
+        } else {
+            throw new Error('Cannot update activity: activity is missing id');
+        }
     }
 
     async deleteActivity(context, reference) {
-
+        if (reference.activityId) {
+            // call chat.delete
+            try {
+                const results = await this.getAPI(context.activity).chat.delete({ ts: reference.activityId, channel: reference.conversation });
+                console.log('Result of delete activity:', results);
+            } catch (err) {
+                console.error('Error deleting activity', err);
+                throw new Error(err);
+            }
+        } else {
+            throw new Error('Cannot delete activity: reference is missing activityId');
+        }
     }
 
     async continueConversation(reference, logic) {
         console.log('ATTEMPTING TO CONTINUE CONVERSATION');
         const request = TurnContext.applyConversationReference(
-            {type: 'event',  name: 'continueConversation' },
+            { type: 'event', name: 'continueConversation' },
             reference,
             true
         );
@@ -68,7 +126,6 @@ class SlackAdapter extends BotAdapter {
     }
 
     async processActivity(req, res, logic) {
-
         // Create an Activity based on the incoming message from Slack.
         // There are a few different types of event that Slack might send.
         let event = req.body;
@@ -94,7 +151,7 @@ class SlackAdapter extends BotAdapter {
                     from: event.user.id,
                     recipient: this.identity.user_id,
                     channelData: event,
-                    type: event.type,
+                    type: event.type
                 };
 
                 // create a conversation reference
@@ -107,7 +164,6 @@ class SlackAdapter extends BotAdapter {
 
                 this.runMiddleware(context, logic)
                     .catch((err) => { this.printError(err.toString()); });
-
             }
         } else if (event.event) {
             // this is an event api post
@@ -116,8 +172,6 @@ class SlackAdapter extends BotAdapter {
                 res.status(403);
                 res.end();
             } else {
-
-
                 const activity = {
                     id: event.event.ts, // TODO: is this the right field?
                     timestamp: new Date(),
@@ -125,15 +179,22 @@ class SlackAdapter extends BotAdapter {
                     conversation: event.event.channel,
                     from: event.event.user,
                     recipient: event.api_app_id,
-                    channelData: event,
+                    channelData: event
                 };
 
                 if (event.event.type === 'message') {
                     activity.type = ActivityTypes.Message;
                     activity.text = event.event.text;
+
+                    // TODO: better handle message sub_type fields
+                    if (event.event.subtype) {
+                        activity.type = event.event.subtype;
+                    }
+
                 } else {
                     activity.type = event.event.type;
                 }
+
 
                 // prevent bots from being confused by self-messages.
                 // PROBLEM: we don't have our own bot_id!
@@ -141,7 +202,7 @@ class SlackAdapter extends BotAdapter {
                 // TODO: perhaps this should be cached somehow?
                 // TODO: error checking on this API call!
                 if (event.event.bot_id) {
-                    const bot_info = await this.slack.bots.info({ bot: event.event.bot_id } );
+                    const bot_info = await this.getAPI(activity).bots.info({ bot: event.event.bot_id });
                     if (bot_info.bot.app_id === event.api_app_id) {
                         activity.from = bot_info.bot.user_id;
                     }

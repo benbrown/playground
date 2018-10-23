@@ -5,11 +5,10 @@ const restify = require('restify');
 const path = require('path');
 
 // Import required bot services. See https://aka.ms/bot-services to learn more about the different part of a bot
-const { BotFrameworkAdapter, MemoryStorage, ConversationState, UserState, TurnContext } = require('botbuilder');
+const { MemoryStorage, ConversationState, UserState, TurnContext } = require('botbuilder');
 const { BotConfiguration } = require('botframework-config');
 
 const { SlackAdapter } = require('./slack_adapter.js');
-
 
 // Read botFilePath and botFileSecret from .env file
 // Note: Ensure you have a .env file and include botFilePath and botFileSecret.
@@ -47,15 +46,12 @@ const BOT_CONFIGURATION = (process.env.NODE_ENV || DEV_ENVIRONMENT);
 // Get bot endpoint configuration by service name
 const endpointConfig = botConfig.findServiceByNameOrId(BOT_CONFIGURATION);
 
-
 const adapter = new SlackAdapter({
     verificationToken: process.env.verificationToken,
     botToken: process.env.botToken,
     oauthToken: process.env.oauthToken,
     debug: true
 });
-
-
 
 // Load typing middleware
 // adapter.use(new ShowTypingMiddleware(2000,4000));
@@ -85,12 +81,28 @@ const userState = new UserState(memoryStorage);
 // Listen for incoming requests.
 server.post('/api/messages', (req, res) => {
     adapter.processActivity(req, res, async (context) => {
-
         if (context.activity.type === 'message') {
-
             if (context.activity.text === 'delayed') {
                 await context.sendActivity('give me 10 seconds....');
                 await respondDelayed(context);
+            } else if (context.activity.text === 'delete') {
+                const outgoing = await context.sendActivity('This message will self destruct in a few seconds!');
+                console.log('outgoing id:', outgoing);
+                var reference = TurnContext.getConversationReference(context.activity);
+                setTimeout(async () => {
+                    await adapter.continueConversation(reference, async function(new_context) {
+                        adapter.deleteActivity(new_context, { activityId: outgoing.id, conversation: outgoing.conversation });
+                    });
+                }, 5000);
+            } else if (context.activity.text === 'update') {
+                const outgoing = await context.sendActivity('This message will be updated in a few seconds!');
+                console.log('outgoing id:', outgoing);
+                var reference = TurnContext.getConversationReference(context.activity);
+                setTimeout(async () => {
+                    await adapter.continueConversation(reference, async function(new_context) {
+                        adapter.updateActivity(new_context, {text: 'This has been updated!', ...outgoing});
+                    });
+                }, 5000);
             } else {
                 await context.sendActivity({
                     text: 'Heard: ' + context.activity.text,
@@ -104,7 +116,7 @@ server.post('/api/messages', (req, res) => {
                                         name: 'ok_button',
                                         text: 'OK',
                                         value: true,
-                                        type: 'button',
+                                        type: 'button'
                                     }
                                 ]
                             }
@@ -112,28 +124,27 @@ server.post('/api/messages', (req, res) => {
                     }
                 });
             }
-
         } else {
             console.log('EVENT:', context.activity.type);
             if (context.activity.type === 'interactive_message') {
                 adapter.slack.dialog.open({
                     trigger_id: context.activity.channelData.trigger_id,
                     dialog: {
-                        "callback_id": "ryde-46e2b0",
-                        "title": "Request a Ride",
-                        "submit_label": "Request",
-                        "notify_on_cancel": true,
-                        "state": "Limo",
-                        "elements": [
+                        'callback_id': 'ryde-46e2b0',
+                        'title': 'Request a Ride',
+                        'submit_label': 'Request',
+                        'notify_on_cancel': true,
+                        'state': 'Limo',
+                        'elements': [
                             {
-                                "type": "text",
-                                "label": "Pickup Location",
-                                "name": "loc_origin"
+                                'type': 'text',
+                                'label': 'Pickup Location',
+                                'name': 'loc_origin'
                             },
                             {
-                                "type": "text",
-                                "label": "Dropoff Location",
-                                "name": "loc_destination"
+                                'type': 'text',
+                                'label': 'Dropoff Location',
+                                'name': 'loc_destination'
                             }
                         ]
                     }
@@ -155,10 +166,7 @@ adapter.onTurnError = async (context, error) => {
     conversationState.clear(context);
 };
 
-
-
 async function respondDelayed(context) {
-
     var reference = TurnContext.getConversationReference(context.activity);
     console.log('GOT A REFERENCE', reference);
     setTimeout(async function() {
@@ -168,5 +176,4 @@ async function respondDelayed(context) {
             await new_context.sendActivity('I waited 10 seconds to tell you this.');
         });
     }, 10000);
-
 }
