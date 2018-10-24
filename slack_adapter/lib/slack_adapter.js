@@ -15,8 +15,7 @@ class SlackAdapter extends BotAdapter {
             this.slack = new WebClient(this.options.botToken);
             this.slack.auth.test().then((identity) => {
                 console.log('** Slack adapter running in single team mode.');
-                this.identity = identity;
-                console.log('My Slack identity: ', identity.user,'on team',identity.team);
+                console.log('** My Slack identity: ', identity.user,'on team',identity.team);
             }).catch((err) => {
                 // This is a fatal error! Invalid credentials have been provided and the bot can't start.
                 console.error(err);
@@ -181,6 +180,8 @@ class SlackAdapter extends BotAdapter {
                 // console.log('GOT INTERACTIVE MESSAGE (button click, dialog submit, other)');
                 console.log(JSON.stringify(event, null, 2));
 
+                // event.original_message.bot_id
+
                 const activity = {
                     timestamp: new Date(),
                     channelId: event.team.id,
@@ -215,7 +216,7 @@ class SlackAdapter extends BotAdapter {
                     channelId: event.team_id,
                     conversation: event.event.channel,
                     from: event.event.user, // TODO: bot_messages do not have a user field
-                    recipient: event.api_app_id,
+                    // recipient: event.api_app_id, // TODO: what should this actually be? hard to make it consistent.
                     channelData: event.event,
                     type: ActivityTypes.Event
                 };
