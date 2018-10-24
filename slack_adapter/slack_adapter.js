@@ -1,4 +1,4 @@
-const { ActivityTypes, BotAdapter, TurnContext } = require('botbuilder');
+const { ActivityTypes, BotAdapter, TurnContext, MiddlewareSet } = require('botbuilder');
 const { WebClient } = require('@slack/client');
 
 class SlackAdapter extends BotAdapter {
@@ -13,19 +13,57 @@ class SlackAdapter extends BotAdapter {
 
         if (this.options.botToken) {
             this.slack = new WebClient(this.options.botToken);
-
             this.slack.auth.test().then((identity) => {
+                console.log('** Slack adapter running in single team mode.');
                 this.identity = identity;
-                console.log('My identity: ', identity);
+                console.log('My Slack identity: ', identity.user,'on team',identity.team);
+            }).catch((err) => {
+                // This is a fatal error! Invalid credentials have been provided and the bot can't start.
+                console.error(err);
+                process.exit(1);
             });
         } else if (!this.options.getTokenForTeam) {
-
+            // This is a fatal error. No way to get a token to interact with the Slack API.
+            console.error('Missing Slack API credentials! Provide either a botToken or a getTokenForTeam() function as part of the SlackAdapter options.');
+            process.exit(1);
+        } else if (!this.options.clientId || !this.options.clientSecret || !this.options.scopes || !this.options.redirectUri) {
+            // This is a fatal error. Need info to connet to Slack via oauth
+            console.error('Missing Slack API credentials! Provide clientId, clientSecret, scopes and redirectUri as part of the SlackAdapter options.');
+            process.exit(1);
+        } else {
+            console.log('** Slack adapter running in multi-team mode.');
         }
     }
 
-    getAPI(activity) {
+    async getAPI(activity) {
         // TODO: use activity.channelId (the slack team id) and get the appropriate token using getTokenForTeam
-        return this.slack;
+        if (this.slack) {
+            return this.slack;
+        } else {
+            const token = await this.options.getTokenForTeam(activity.channelId);
+            return new WebClient(token);
+        }
+    }
+
+    getInstallLink() {
+        const redirect = 'https://slack.com/oauth/authorize?client_id=' + this.options.clientId + '&scope=' + this.options.scopes.join(',');
+        return redirect;
+    }
+
+    async validateOauthCode(code) {
+        const slack = new WebClient();
+        const results = await slack.oauth.access({
+            code: code,
+            client_id: this.options.clientId,
+            client_secret: this.options.clientSecret,
+            redirect_uri: this.options.redirectUri
+        });
+        if (results.ok) {
+            return results;
+        } else {
+            // TODO: What should we return here?
+            throw new Error(results.error);
+        }
     }
 
     activityToSlack(activity) {
@@ -52,7 +90,8 @@ class SlackAdapter extends BotAdapter {
                 const message = this.activityToSlack(activity);
 
                 try {
-                    const result = await this.getAPI(context.activity).chat.postMessage(message);
+                    const slack = await this.getAPI(context.activity);
+                    const result = await slack.chat.postMessage(message);
                     if (result.ok === true) {
                         responses.push({
                             id: result.ts,
@@ -80,8 +119,8 @@ class SlackAdapter extends BotAdapter {
 
                 // set the id of the message to be updated
                 message.ts = activity.activityId;
-
-                const results = await this.getAPI(context.activity).chat.update(message);
+                const slack = await this.getAPI(context.activity);
+                const results = await slack.chat.update(message);
                 if (!results.ok) {
                     console.error('Error updating activity on Slack:', results);
                 }
@@ -98,7 +137,8 @@ class SlackAdapter extends BotAdapter {
     async deleteActivity(context, reference) {
         if (reference.activityId && reference.conversation) {
             try {
-                const results = await this.getAPI(context.activity).chat.delete({ ts: reference.activityId, channel: reference.conversation });
+                const slack = await this.getAPI(context.activity);
+                const results = await slack.chat.delete({ ts: reference.activityId, channel: reference.conversation });
                 if (!results.ok) {
                     console.error('Error deleting activity:', results);
                 }
@@ -139,16 +179,16 @@ class SlackAdapter extends BotAdapter {
                 res.end();
             } else {
                 // console.log('GOT INTERACTIVE MESSAGE (button click, dialog submit, other)');
-                // console.log(JSON.stringify(event, null, 2));
+                console.log(JSON.stringify(event, null, 2));
 
                 const activity = {
                     timestamp: new Date(),
                     channelId: event.team.id,
                     conversation: event.channel.id,
                     from: event.user.id,
-                    recipient: this.identity.user_id,
+                    // recipient: this.identity.user_id,
                     channelData: event,
-                    type: event.type
+                    type: ActivityTypes.Event
                 };
 
                 // create a conversation reference
@@ -162,7 +202,7 @@ class SlackAdapter extends BotAdapter {
                 this.runMiddleware(context, logic)
                     .catch((err) => { this.printError(err.toString()); });
             }
-        } else if (event.event) {
+        } else if (event.type === 'event_callback') {
             // this is an event api post
             if (event.token !== this.options.verificationToken) {
                 console.error('Rejected due to mismatched verificationToken:', event);
@@ -170,43 +210,20 @@ class SlackAdapter extends BotAdapter {
                 res.end();
             } else {
                 const activity = {
-                    id: event.event.ts, // TODO: is this the right field?
+                    id: event.event.ts,
                     timestamp: new Date(),
                     channelId: event.team_id,
                     conversation: event.event.channel,
-                    from: event.event.user,
+                    from: event.event.user, // TODO: bot_messages do not have a user field
                     recipient: event.api_app_id,
-                    channelData: event
+                    channelData: event.event,
+                    type: ActivityTypes.Event
                 };
 
-                if (event.event.type === 'message') {
+                // If this is conclusively a message originating from a user, we'll 
+                if (event.event.type === 'message' && !event.event.subtype) {
                     activity.type = ActivityTypes.Message;
                     activity.text = event.event.text;
-
-                    // TODO: better handle message sub_type fields
-                    if (event.event.subtype) {
-                        activity.type = event.event.subtype;
-                    }
-
-                } else {
-                    activity.type = event.event.type;
-                }
-
-
-                // prevent bots from being confused by self-messages.
-                // PROBLEM: we don't have our own bot_id!
-                // SOLUTION: load it up and compare!
-                // TODO: perhaps this should be cached somehow?
-                // TODO: error checking on this API call!
-                if (event.event.bot_id) {
-                    const bot_info = await this.getAPI(activity).bots.info({ bot: event.event.bot_id });
-                    if (bot_info.bot.app_id === event.api_app_id) {
-                        activity.from = bot_info.bot.user_id;
-                    }
-                }
-
-                if (activity.from === this.identity.user_id) {
-                    activity.type = 'self_' + activity.type;
                 }
 
                 // create a conversation reference
@@ -225,4 +242,45 @@ class SlackAdapter extends BotAdapter {
     }
 }
 
+class SlackEventMiddleware extends MiddlewareSet {
+
+    async onTurn(context, next) {
+        if (context.activity.type === ActivityTypes.Event && context.activity.channelData) {
+            // Handle message sub-types
+            if (context.activity.channelData.subtype) {
+                context.activity.type = context.activity.channelData.subtype;
+            } else if (context.activity.channelData.type) {
+                context.activity.type = context.activity.channelData.type;
+            }
+        }
+        await next();
+    }
+}
+
+class SlackIdentifyBotsMiddleware extends MiddlewareSet {
+    async onTurn(context, next) {
+        // prevent bots from being confused by self-messages.
+        // PROBLEM: we don't have our own bot_id!
+        // SOLUTION: load it up and compare!
+        // TODO: perhaps this should be cached somehow?
+        // TODO: error checking on this API call!
+        if (context.activity.channelData && context.activity.channelData.bot_id) {
+            const slack = await context.adapter.getAPI(context.activity);
+            const bot_info = await slack.bots.info({ bot: context.activity.channelData.bot_id });
+            context.activity.from = bot_info.bot.user_id;
+
+            // TODO: it is possible here to check if this is a message originating from THIS APP because bot_info has an app_id and the event also has one.
+        }
+
+        // // TODO: getting identity out of adapter is brittle!
+        // if (context.activity.from === context.adapter.identity.user_id) {
+        //     context.activity.type = 'self_' + context.activity.type;
+        // }
+
+        await next();
+    }
+}
+
 module.exports.SlackAdapter = SlackAdapter;
+module.exports.SlackEventMiddleware = SlackEventMiddleware;
+module.exports.SlackIdentifyBotsMiddleware = SlackIdentifyBotsMiddleware;

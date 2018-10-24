@@ -18,6 +18,7 @@ require('dotenv').config({ path: ENV_FILE });
 // Create HTTP server
 let server = restify.createServer();
 server.use(restify.plugins.bodyParser({ mapParams: false }));
+server.use(restify.plugins.queryParser());
 server.listen(process.env.port || process.env.PORT || 3978, function() {
     console.log(`\n${ server.name } listening to ${ server.url }`);
     console.log(`\nGet Bot Framework Emulator: https://aka.ms/botframework-emulator`);
@@ -48,11 +49,11 @@ const endpointConfig = botConfig.findServiceByNameOrId(BOT_CONFIGURATION);
 
 const adapter = new SlackAdapter({
     verificationToken: process.env.verificationToken,
-    botToken: process.env.botToken,
-    // oauthToken: process.env.oauthToken,
-    // getTokenForTeam: async (teamId) => {
-    //     return process.env.botToken;
-    // },
+    clientId: process.env.clientId,
+    clientSecret: process.env.clientSecret,
+    scopes: ['bot'],
+    redirectUri: process.env.redirectUri,
+    getTokenForTeam: getTokenForTeam,
     debug: true
 });
 
@@ -87,6 +88,38 @@ const memoryStorage = new MemoryStorage();
 // Create conversation state with in-memory storage provider.
 const conversationState = new ConversationState(memoryStorage);
 const userState = new UserState(memoryStorage);
+
+const tokenCache = [];
+async function getTokenForTeam(teamId) {
+    if (tokenCache[teamId]) {
+        return tokenCache[teamId];
+    } else {
+        console.error('Team not found in tokenCache: ', teamId);
+    }
+}
+
+server.get('/install', (req, res) => {
+    // getInstallLink points to slack's oauth endpoint and includes clientId and scopes
+    res.redirect(adapter.getInstallLink(), function() {
+        res.end();
+    });
+});
+
+server.get('/install/auth', async (req, res) => {
+    try {
+        const results = await adapter.validateOauthCode(req.query.code);
+
+        // Store token by team in bot state.
+        tokenCache[results.team_id] = results.bot.bot_access_token;
+
+        res.json('Success! Bot installed.');
+
+    } catch (err) {
+        console.error('OAUTH ERROR:', err);
+        res.status(401);
+        res.send(err.message);
+    }
+});
 
 // Listen for incoming requests.
 server.post('/api/messages', (req, res) => {
