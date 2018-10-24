@@ -8,7 +8,7 @@ const path = require('path');
 const { MemoryStorage, ConversationState, UserState, TurnContext } = require('botbuilder');
 const { BotConfiguration } = require('botframework-config');
 
-const { SlackAdapter, SlackEventMiddleware, SlackIdentifyBotsMiddleware } = require('./slack_adapter.js');
+const { SlackAdapter, SlackEventMiddleware, SlackIdentifyBotsMiddleware } = require('.');
 
 // Read botFilePath and botFileSecret from .env file
 // Note: Ensure you have a .env file and include botFilePath and botFileSecret.

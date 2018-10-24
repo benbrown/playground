@@ -1,8 +1,8 @@
 {
-  "name": "eventbot",
+  "name": "botbuilder-slack",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "lib/slack_adapter.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "eslint": "./node_modules/.bin/eslint .",
