@@ -6,7 +6,7 @@ class SlackAdapter extends BotAdapter {
     constructor(options) {
         super();
         this.options = options;
-        console.log('BOOTED SLACK ADAPTER', this.options);
+        // console.log('BOOTED SLACK ADAPTER', this.options);
         if (!this.options.verificationToken) {
             throw new Error('Required: include a verificationToken to verify incoming Events API webhooks');
         }
@@ -21,6 +21,11 @@ class SlackAdapter extends BotAdapter {
         } else if (!this.options.getTokenForTeam) {
 
         }
+    }
+
+    getAPI(activity) {
+        // TODO: use activity.channelId (the slack team id) and get the appropriate token using getTokenForTeam
+        return this.slack;
     }
 
     activityToSlack(activity) {
@@ -48,10 +53,10 @@ class SlackAdapter extends BotAdapter {
 
                 try {
                     const result = await this.getAPI(context.activity).chat.postMessage(message);
-                    console.log('RESULT OF POST', result);
                     if (result.ok === true) {
                         responses.push({
                             id: result.ts,
+                            activityId: result.ts,
                             conversation: result.channel,
                         });
                     } else {
@@ -68,21 +73,13 @@ class SlackAdapter extends BotAdapter {
         return responses;
     }
 
-    getAPI(activity) {
-        // TODO: use activity.channelId (the slack team id) and get the appropriate token using getTokenForTeam
-        return this.slack;
-    }
-
     async updateActivity(context, activity) {
-        if (activity.id) {
-            console.log('UPDATE ACTIVITY', activity);
+        if (activity.activityId && activity.conversation) {
             try {
                 const message = this.activityToSlack(activity);
 
                 // set the id of the message to be updated
-                message.ts = activity.id;
-
-                console.log('MESSAGE TO UPDATE', message);
+                message.ts = activity.activityId;
 
                 const results = await this.getAPI(context.activity).chat.update(message);
                 if (!results.ok) {
@@ -99,11 +96,12 @@ class SlackAdapter extends BotAdapter {
     }
 
     async deleteActivity(context, reference) {
-        if (reference.activityId) {
-            // call chat.delete
+        if (reference.activityId && reference.conversation) {
             try {
                 const results = await this.getAPI(context.activity).chat.delete({ ts: reference.activityId, channel: reference.conversation });
-                console.log('Result of delete activity:', results);
+                if (!results.ok) {
+                    console.error('Error deleting activity:', results);
+                }
             } catch (err) {
                 console.error('Error deleting activity', err);
                 throw new Error(err);
@@ -114,7 +112,6 @@ class SlackAdapter extends BotAdapter {
     }
 
     async continueConversation(reference, logic) {
-        console.log('ATTEMPTING TO CONTINUE CONVERSATION');
         const request = TurnContext.applyConversationReference(
             { type: 'event', name: 'continueConversation' },
             reference,
@@ -130,7 +127,7 @@ class SlackAdapter extends BotAdapter {
         // There are a few different types of event that Slack might send.
         let event = req.body;
 
-        console.log('GOT SLACK EVENT', event);
+        // console.log('GOT SLACK EVENT', event);
         if (event.type === 'url_verification') {
             res.status(200);
             res.send(event.challenge);
@@ -141,7 +138,7 @@ class SlackAdapter extends BotAdapter {
                 res.status(403);
                 res.end();
             } else {
-                console.log('GOT INTERACTIVE MESSAGE (button click, dialog submit, other)');
+                // console.log('GOT INTERACTIVE MESSAGE (button click, dialog submit, other)');
                 // console.log(JSON.stringify(event, null, 2));
 
                 const activity = {

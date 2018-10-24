@@ -87,16 +87,16 @@ server.post('/api/messages', (req, res) => {
                 await respondDelayed(context);
             } else if (context.activity.text === 'delete') {
                 const outgoing = await context.sendActivity('This message will self destruct in a few seconds!');
-                console.log('outgoing id:', outgoing);
+                // console.log('outgoing id:', outgoing);
                 var reference = TurnContext.getConversationReference(context.activity);
                 setTimeout(async () => {
                     await adapter.continueConversation(reference, async function(new_context) {
-                        adapter.deleteActivity(new_context, { activityId: outgoing.id, conversation: outgoing.conversation });
+                        adapter.deleteActivity(new_context, outgoing);
                     });
                 }, 5000);
             } else if (context.activity.text === 'update') {
                 const outgoing = await context.sendActivity('This message will be updated in a few seconds!');
-                console.log('outgoing id:', outgoing);
+                // console.log('outgoing id:', outgoing);
                 var reference = TurnContext.getConversationReference(context.activity);
                 setTimeout(async () => {
                     await adapter.continueConversation(reference, async function(new_context) {
@@ -125,7 +125,7 @@ server.post('/api/messages', (req, res) => {
                 });
             }
         } else {
-            console.log('EVENT:', context.activity.type);
+            // console.log('EVENT:', context.activity.type);
             if (context.activity.type === 'interactive_message') {
                 adapter.slack.dialog.open({
                     trigger_id: context.activity.channelData.trigger_id,
@@ -168,11 +168,11 @@ adapter.onTurnError = async (context, error) => {
 
 async function respondDelayed(context) {
     var reference = TurnContext.getConversationReference(context.activity);
-    console.log('GOT A REFERENCE', reference);
+    // console.log('GOT A REFERENCE', reference);
     setTimeout(async function() {
-        console.log('FIRING DELAYED CONTINUE');
+        // console.log('FIRING DELAYED CONTINUE');
         await adapter.continueConversation(reference, async function(new_context) {
-            console.log('GOT A NEW CONTEXT');
+            // console.log('GOT A NEW CONTEXT');
             await new_context.sendActivity('I waited 10 seconds to tell you this.');
         });
     }, 10000);
