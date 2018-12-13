@@ -164,14 +164,7 @@ export class BotkitDialog<O extends object = {}> extends Dialog<O> {
         // This prompt must be a valid dialog defined somewhere in your code!
         if (line.collect) {
             try {
-                let outgoing;
-                if (line.quick_replies) {
-                    outgoing = MessageFactory.suggestedActions(line.quick_replies.map((reply) => { return { type: ActionTypes.PostBack, title: reply.title, text: reply.payload, displayText: reply.title, value: reply.payload}; }), line.text[0]);
-                } else {
-                    outgoing = MessageFactory.text(line.text[0]);
-                }
-
-                return await dc.prompt(this._prompt, outgoing); // todo: pick randomly
+                return await dc.prompt(this._prompt, this.makeOutgoing(line)); // todo: pick randomly
             } catch (err) {
                 console.error(err);
                 const res = await dc.context.sendActivity(`Failed to start prompt ${ line.prompt.id }`);
@@ -181,13 +174,7 @@ export class BotkitDialog<O extends object = {}> extends Dialog<O> {
         // This could be extended to include cards and other activity attributes.
         } else {
             if (line.text) {
-                let outgoing;
-                if (line.quick_replies) {
-                    outgoing = MessageFactory.suggestedActions(line.quick_replies.map((reply) => { return { type:  ActionTypes.PostBack, title: reply.title, text: reply.payload, displayText: reply.title, value: reply.payload}; }), line.text[0]);
-                } else {
-                    outgoing = MessageFactory.text(line.text[0]);
-                }
-                await dc.context.sendActivity(outgoing); // todo: update to pick randomly from options
+                await dc.context.sendActivity(this.makeOutgoing(line)); // todo: update to pick randomly from options
             }
             
             if (line.action) {
@@ -196,42 +183,6 @@ export class BotkitDialog<O extends object = {}> extends Dialog<O> {
                 if (res !== false) {
                     return res;
                 }
-                // switch (line.action) {
-                //     case 'next':
-                //         break;
-                //     case 'complete':
-                //         step.values._status = 'completed';
-                //         return await dc.endDialog(step.result);
-                //     case 'stop':
-                //         step.values._status = 'canceled';
-                //         return await dc.endDialog(step.result);
-                //         break;
-                //     case 'timeout':
-                //         step.values._status = 'timeout';
-                //         return await dc.endDialog(step.result);
-                //         break;
-                //     case 'execute_script':
-                //         // todo figure out how to goto thread
-                //         // todo figure out how to pass in existing values
-                //         return await dc.beginDialog(line.execute.script, step.values);
-                //         break;
-                //     // this can only happen in a conditional
-                //     // case 'repeat':
-                //     // console.log('REPEATING!');
-                //     // return await this.runStep(dc,step.index, step.thread, DialogReason.nextCalled);
-                //     //     break;
-                //     case 'wait':
-                //         console.log('NOT SURE WHAT TO DO WITH THIS!!', line);
-                //         break;
-                //     default: 
-                //         // default behavior for unknown action in botkit is to gotothread
-                //         if (this.script.script.filter((thread) => { return thread.topic === line.action }).length) {
-                //             return await this.runStep(dc,0, line.action, DialogReason.nextCalled, step.values);
-                //         } else {
-                //             console.log('NOT SURE WHAT TO DO WITH THIS!!', line);
-                //             break;
-                //         }
-                // }
             }
 
             return await step.next();
@@ -286,6 +237,16 @@ export class BotkitDialog<O extends object = {}> extends Dialog<O> {
         if (this.onComplete) {
             return await this.onComplete(context,instance.state.values);
         }
+    }
+
+    private makeOutgoing(line) {
+        let outgoing;
+        if (line.quick_replies) {
+            outgoing = MessageFactory.suggestedActions(line.quick_replies.map((reply) => { return { type:  ActionTypes.PostBack, title: reply.title, text: reply.payload, displayText: reply.title, value: reply.payload}; }), line.text[0]);
+        } else {
+            outgoing = MessageFactory.text(line.text[Math.floor(Math.random()*line.text.length)]);
+        }
+        return outgoing;
     }
 
     private async handleAction(path, dc, step) {
