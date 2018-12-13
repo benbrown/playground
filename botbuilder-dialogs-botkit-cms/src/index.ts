@@ -1,7 +1,6 @@
 import { ActivityTypes, TurnContext, MessageFactory, ActionTypes } from 'botbuilder';
-import { Dialog, DialogInstance, DialogSet, DialogReason, TextPrompt } from 'botbuilder-dialogs';
+import { Dialog, DialogContext, DialogInstance, DialogSet, DialogReason, TextPrompt } from 'botbuilder-dialogs';
 import * as BotkitCMS from 'botkit-studio-sdk';
-import { lstat } from 'fs';
 
 export interface BotkitDialogConfig {
     cms_uri: string;
@@ -9,21 +8,36 @@ export interface BotkitDialogConfig {
     onComplete?: any;
 }
 
-export async function loadAllScripts(config: BotkitDialogConfig, dialogSet: DialogSet) {
+export class BotkitHelper {
+    private _config: BotkitDialogConfig;
+    private cms: BotkitCMS;
+
+    constructor(config: BotkitDialogConfig) {
+        this._config = config;
+        this.cms = new BotkitCMS({
+            studio_command_uri: config.cms_uri,
+            studio_token: config.token
+        })
+    }
+
+    async loadAllScripts(dialogSet: DialogSet) {
+
+        var scripts = await this.cms.getScripts();
+
+        scripts.forEach((script)=> { 
+            let d = new BotkitDialog(script.command, this._config);
+            d.script = script;
+            dialogSet.add(d);
+        });
+    }
+
+    async testTrigger(dc: DialogContext) {
+        const command = await this.cms.evaluateTrigger(dc.context.activity.text);
+        if (command.command) {
+            return await dc.beginDialog(command.command);
+        }
+    }
     
-    const cms = new BotkitCMS({
-        studio_command_uri: config.cms_uri,
-        studio_token: config.token
-    });
-
-    var scripts = await cms.getScripts();
-
-    scripts.forEach((script)=> { 
-        let d = new BotkitDialog(script.command, config);
-        d.script = script;
-        dialogSet.add(d);
-    });
-
 }
 
 export class BotkitDialog<O extends object = {}> extends Dialog<O> {
@@ -294,9 +308,7 @@ export class BotkitDialog<O extends object = {}> extends Dialog<O> {
     }
 
     async endDialog(context: TurnContext, instance: DialogInstance, reason: DialogReason) {
-        console.log('CALLING ONCOMPLETE', instance.state.values);
         if (this.onComplete) {
-            console.log('CALLING ONCOMPLETE', instance.state.values);
             return await this.onComplete(context,instance.state.values);
         }
     }
