@@ -45,6 +45,7 @@ export class BotkitDialog<O extends object = {}> extends Dialog<O> {
     public script: any;
     private _config: BotkitDialogConfig;
     private _prompt: string;
+    private _beforeHooks: {};
 
     constructor(dialogId: string, config: BotkitDialogConfig, onComplete?) {
         super(dialogId);
@@ -55,8 +56,28 @@ export class BotkitDialog<O extends object = {}> extends Dialog<O> {
             this.onComplete = onComplete;
         }
 
+        this._beforeHooks = {};
+
         return this;
 
+    }
+
+    public before(thread_name, handler) {
+        if (!this._beforeHooks[thread_name]) {
+            this._beforeHooks[thread_name] = [];
+        }
+
+        this._beforeHooks[thread_name].push(handler);
+    }
+
+     private async runBefore(thread_name, dc, step) {
+        let that = this;
+        console.log('Run hooks before ', thread_name);
+        if (this._beforeHooks[thread_name]){
+            this._beforeHooks[thread_name].forEach(async (handler) => {
+                await handler.call(that, dc, step);
+            });
+        }
     }
 
     async beginDialog(dc, options) {
@@ -249,6 +270,13 @@ export class BotkitDialog<O extends object = {}> extends Dialog<O> {
         return outgoing;
     }
 
+    private async gotoThread(thread, dc, step) {
+        step.index = 0;
+        step.thread = thread;
+        await this.runBefore(step.thread, dc, step);
+        return await this.runStep(dc, step.index, step.thread, DialogReason.nextCalled, step.values);
+    }
+
     private async handleAction(path, dc, step) {
 
         switch (path.action) {
@@ -281,7 +309,7 @@ export class BotkitDialog<O extends object = {}> extends Dialog<O> {
             default: 
                 // default behavior for unknown action in botkit is to gotothread
                 if (this.script.script.filter((thread) => { return thread.topic === path.action }).length) {
-                    return await this.runStep(dc,0, path.action, DialogReason.nextCalled, step.values);
+                   return await this.gotoThread(path.action, dc, step);
                 } else {
                     console.log('NOT SURE WHAT TO DO WITH THIS!!', path);
                     break;
