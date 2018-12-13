@@ -5,7 +5,6 @@ import * as BotkitCMS from 'botkit-studio-sdk';
 export interface BotkitDialogConfig {
     cms_uri: string;
     token: string;
-    onComplete?: any;
 }
 
 export class BotkitHelper {
@@ -42,7 +41,7 @@ export class BotkitHelper {
 
 export class BotkitDialog<O extends object = {}> extends Dialog<O> {
 
-    private onComplete: any;
+    public onComplete: any;
     public script: any;
     private _config: BotkitDialogConfig;
     private _prompt: string;
@@ -64,7 +63,7 @@ export class BotkitDialog<O extends object = {}> extends Dialog<O> {
         // Initialize the state
         const state = dc.activeDialog.state;
         state.options = options || {};
-        state.values = {};
+        state.values = {...options};
 
         if (!this.script) {
             // load script from API
@@ -152,43 +151,13 @@ export class BotkitDialog<O extends object = {}> extends Dialog<O> {
                     path = default_path;
                 }
 
-                switch (path.action) {
-                    case 'next':
-                        break;
-                    case 'complete':
-                        step.values._status = 'completed';
-                        return await dc.endDialog(step.result);
-                        break;
-                    case 'stop':
-                        step.values._status = 'canceled';
-                        return await dc.endDialog(step.result);
-                        break;
-                    case 'timeout':
-                        step.values._status = 'timeout';
-                        return await dc.endDialog(step.result);
-                        break;
-                    case 'execute_script':
-                        // todo figure out how to goto thread
-                        return await dc.beginDialog(path.execute.script);
-                        break;
-                    case 'repeat':
-                        return await this.runStep(dc, step.index - 1, step.thread, DialogReason.nextCalled);
-                        break;
-                    case 'wait':
-                        console.log('NOT SURE WHAT TO DO WITH THIS!!', line);
-                        break;
-                    default: 
-                        // default behavior for unknown action in botkit is to gotothread
-                        if (this.script.script.filter((thread) => { return thread.topic === path.action }).length) {
-                            return await this.runStep(dc,0, path.action, DialogReason.nextCalled, step.values);
-                        } else {
-                            console.log('NOT SURE WHAT TO DO WITH THIS!!', line);
-                            break;
-                        }
+                if (path) {
+                    var res = await this.handleAction(path, dc, step);
+                    if (res !== false) {
+                        return res;
+                    }
                 }
-
             }
-
         }
 
         // If a prompt is defined in the script, use dc.prompt to call it.
@@ -222,41 +191,47 @@ export class BotkitDialog<O extends object = {}> extends Dialog<O> {
             }
             
             if (line.action) {
-                switch (line.action) {
-                    case 'next':
-                        break;
-                    case 'complete':
-                        step.values._status = 'completed';
-                        return await dc.endDialog(step.result);
-                    case 'stop':
-                        step.values._status = 'canceled';
-                        return await dc.endDialog(step.result);
-                        break;
-                    case 'timeout':
-                        step.values._status = 'timeout';
-                        return await dc.endDialog(step.result);
-                        break;
-                    case 'execute_script':
-                        // todo figure out how to goto thread
-                        return await dc.beginDialog(line.execute.script);
-                        break;
-                    // this can only happen in a conditional
-                    // case 'repeat':
-                    // console.log('REPEATING!');
-                    // return await this.runStep(dc,step.index, step.thread, DialogReason.nextCalled);
-                    //     break;
-                    case 'wait':
-                        console.log('NOT SURE WHAT TO DO WITH THIS!!', line);
-                        break;
-                    default: 
-                        // default behavior for unknown action in botkit is to gotothread
-                        if (this.script.script.filter((thread) => { return thread.topic === line.action }).length) {
-                            return await this.runStep(dc,0, line.action, DialogReason.nextCalled, step.values);
-                        } else {
-                            console.log('NOT SURE WHAT TO DO WITH THIS!!', line);
-                            break;
-                        }
+
+                var res = await this.handleAction(line, dc, step);
+                if (res !== false) {
+                    return res;
                 }
+                // switch (line.action) {
+                //     case 'next':
+                //         break;
+                //     case 'complete':
+                //         step.values._status = 'completed';
+                //         return await dc.endDialog(step.result);
+                //     case 'stop':
+                //         step.values._status = 'canceled';
+                //         return await dc.endDialog(step.result);
+                //         break;
+                //     case 'timeout':
+                //         step.values._status = 'timeout';
+                //         return await dc.endDialog(step.result);
+                //         break;
+                //     case 'execute_script':
+                //         // todo figure out how to goto thread
+                //         // todo figure out how to pass in existing values
+                //         return await dc.beginDialog(line.execute.script, step.values);
+                //         break;
+                //     // this can only happen in a conditional
+                //     // case 'repeat':
+                //     // console.log('REPEATING!');
+                //     // return await this.runStep(dc,step.index, step.thread, DialogReason.nextCalled);
+                //     //     break;
+                //     case 'wait':
+                //         console.log('NOT SURE WHAT TO DO WITH THIS!!', line);
+                //         break;
+                //     default: 
+                //         // default behavior for unknown action in botkit is to gotothread
+                //         if (this.script.script.filter((thread) => { return thread.topic === line.action }).length) {
+                //             return await this.runStep(dc,0, line.action, DialogReason.nextCalled, step.values);
+                //         } else {
+                //             console.log('NOT SURE WHAT TO DO WITH THIS!!', line);
+                //             break;
+                //         }
+                // }
             }
 
             return await step.next();
@@ -311,5 +286,47 @@ export class BotkitDialog<O extends object = {}> extends Dialog<O> {
         if (this.onComplete) {
             return await this.onComplete(context,instance.state.values);
         }
+    }
+
+    private async handleAction(path, dc, step) {
+
+        switch (path.action) {
+            case 'next':
+                break;
+            case 'complete':
+                step.values._status = 'completed';
+                return await dc.endDialog(step.result);
+                break;
+            case 'stop':
+                step.values._status = 'canceled';
+                return await dc.endDialog(step.result);
+                break;
+            case 'timeout':
+                step.values._status = 'timeout';
+                return await dc.endDialog(step.result);
+                break;
+            case 'execute_script':
+                // todo figure out how to goto thread
+                // todo figure out how to pass in existing values
+                // todo figure out how to capture responses from sub-script?
+                return await dc.beginDialog(path.execute.script, step.values);
+                break;
+            case 'repeat':
+                return await this.runStep(dc, step.index - 1, step.thread, DialogReason.nextCalled);
+                break;
+            case 'wait':
+                console.log('NOT SURE WHAT TO DO WITH THIS!!', path);
+                break;
+            default: 
+                // default behavior for unknown action in botkit is to gotothread
+                if (this.script.script.filter((thread) => { return thread.topic === path.action }).length) {
+                    return await this.runStep(dc,0, path.action, DialogReason.nextCalled, step.values);
+                } else {
+                    console.log('NOT SURE WHAT TO DO WITH THIS!!', path);
+                    break;
+                }
+        }
+
+        return false;
     }
 }
